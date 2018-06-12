@@ -1,158 +1,175 @@
 /*
-    This file is part of Nori, a simple educational ray tracer
+This file is part of Nori, a simple educational ray tracer
 
-    Copyright (c) 2015 by Wenzel Jakob
+Copyright (c) 2015 by Wenzel Jakob
 
-    Nori is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License Version 3
-    as published by the Free Software Foundation.
+Nori is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License Version 3
+as published by the Free Software Foundation.
 
-    Nori is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-    GNU General Public License for more details.
+Nori is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program. If not, see <http://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#pragma once
+#if !defined(__NORI_BVH_H)
+#define __NORI_BVH_H
 
 #include <nori/mesh.h>
 
 NORI_NAMESPACE_BEGIN
 
 /**
- * \brief Acceleration data structure for ray intersection queries
- *
- * The current implementation falls back to a brute force loop
- * through the geometry.
- */
+* \brief Bounding Volume Hierarchy for fast ray intersection queries
+*
+* This class builds a Bounding Volume Hierarchy (BVH) using a greedy
+* divide and conquer build strategy, which locally maximizes a criterion
+* known as the Surface Area Heuristic (SAH) to obtain a tree that is
+* particularly well-suited for ray intersection queries.
+*
+* Construction of a BVH is generally slow; the implementation here runs
+* in parallel to accelerate this process much as possible. For details
+* on how this works, refer to the paper
+*
+* "Fast and Parallel Construction of SAH-based Bounding Volume Hierarchies"
+* by Ingo Wald (Proc. IEEE/EG Symposium on Interactive Ray Tracing, 2007)
+*
+* \author Wenzel Jakob
+*/
 class Accel {
+	friend class BVHBuildTask;
 public:
-
-	// Create a new and empty BVH
+	/// Create a new and empty BVH
 	Accel() { m_meshOffset.push_back(0u); }
 
-	// Release all resources
-	virtual ~Accel() {
-		for (auto mesh : m_meshes)
-			delete mesh;
-		m_meshes.clear();
-		m_meshes.shrink_to_fit();
-		m_indices.clear();
-		m_indices.shrink_to_fit();
-		m_meshOffset.clear();
-		m_meshOffset.push_back(0u);
-		m_meshOffset.shrink_to_fit();
-		m_bbox.reset();
-	};
+	/// Release all resources
+	virtual ~Accel() { clear(); };
 
-    /**
-     * \brief Register a triangle mesh for inclusion in the acceleration
-     * data structure
-     *
-     * This function can only be used before \ref build() is called
-     */
-    void addMesh(Mesh *mesh);
+	/// Release all resources
+	void clear();
 
-    // Build the acceleration data structure (currently a no-op)
-    void build();
+	/**
+	* \brief Register a triangle mesh for inclusion in the BVH.
+	*
+	* This function can only be used before \ref build() is called
+	*/
+	void addMesh(Mesh *mesh);
 
-    /**
-     * \brief Intersect a ray against all triangles stored in the scene and
-     * return detailed intersection information
-     *
-     * \param ray
-     *    A 3-dimensional ray data structure with minimum/maximum extent
-     *    information
-     *
-     * \param its
-     *    A detailed intersection record, which will be filled by the
-     *    intersection query
-     *
-     * \param shadowRay
-     *    \c true if this is a shadow ray query, i.e. a query that only aims to
-     *    find out whether the ray is blocked or not without returning detailed
-     *    intersection information.
-     *
-     * \return \c true if an intersection was found
-     */
-    bool rayIntersect(const Ray3f &ray, Intersection &its, bool shadowRay = false) const;
+	/// Build the BVH
+	void build();
 
-	/// Return the total number of meshes registered with Octree
-	uint32_t getMeshCount() const { return static_cast<uint32_t>(m_meshes.size()); }
+	/**
+	* \brief Intersect a ray against all triangle meshes registered
+	* with the BVH
+	*
+	* Detailed information about the intersection, if any, will be
+	* stored in the provided \ref Intersection data record.
+	*
+	* The <tt>shadowRay</tt> parameter specifies whether this detailed
+	* information is really needed. When set to \c true, the
+	* function just checks whether or not there is occlusion, but without
+	* providing any more detail (i.e. \c its will not be filled with
+	* contents). This is usually much faster.
+	*
+	* \return \c true If an intersection was found
+	*/
+	bool rayIntersect(const Ray3f &ray, Intersection &its,
+		bool shadowRay = false) const;
 
-	/// Return the total number of internally represented triangles
-	uint32_t getTriangleCount() const { return static_cast<uint32_t>(m_meshOffset.back()); }
+	/// Return the total number of meshes registered with the BVH
+	uint32_t getMeshCount() const { return (uint32_t)m_meshes.size(); }
 
-	/// Return an axis-aligned bounding box containing the entire tree
-	const BoundingBox3f &getBoundingBox() const { return m_bbox; }
+	/// Return the total number of internally represented triangles 
+	uint32_t getTriangleCount() const { return m_meshOffset.back(); }
+
+	/// Return one of the registered meshes
+	Mesh *getMesh(uint32_t idx) { return m_meshes[idx]; }
+
+	/// Return one of the registered meshes (const version)
+	const Mesh *getMesh(uint32_t idx) const { return m_meshes[idx]; }
+
+	//// Return an axis-aligned bounding box containing the entire tree
+	const BoundingBox3f &getBoundingBox() const {
+		return m_bbox;
+	}
 
 protected:
 	/**
 	* \brief Compute the mesh and triangle indices corresponding to
-	* a primitive index used by the underlying generic Octree implementation.
+	* a primitive index used by the underlying generic BVH implementation.
 	*/
-	uint32_t findMeshIndex(uint32_t &idx) const {
+	uint32_t findMesh(uint32_t &idx) const {
 		auto it = std::lower_bound(m_meshOffset.begin(), m_meshOffset.end(), idx + 1) - 1;
 		idx -= *it;
 		return (uint32_t)(it - m_meshOffset.begin());
 	}
 
-	// Return an axis-aligned bounding box containing the given triangle
+	//// Return an axis-aligned bounding box containing the given triangle
 	BoundingBox3f getBoundingBox(uint32_t index) const {
-		uint32_t meshIdx = findMeshIndex(index);
+		uint32_t meshIdx = findMesh(index);
 		return m_meshes[meshIdx]->getBoundingBox(index);
 	}
 
-	/// Return the centroid of the given triangle
+	//// Return the centroid of the given triangle
 	Point3f getCentroid(uint32_t index) const {
-		uint32_t meshIdx = findMeshIndex(index);
+		uint32_t meshIdx = findMesh(index);
 		return m_meshes[meshIdx]->getCentroid(index);
 	}
 
-	struct OctreeNode {
+	/// Compute internal tree statistics
+	std::pair<float, uint32_t> statistics(uint32_t index = 0) const;
+
+	/* BVH node in 32 bytes */
+	struct BVHNode {
 		union {
 			struct {
-				uint16_t depth;
 				unsigned flag : 1;
-				uint16_t size : 15;
+				uint32_t size : 31;
 				uint32_t start;
-			} node;
-			
-			uint64_t data;
+			} leaf;
+
+			struct {
+				unsigned flag : 1;
+				uint32_t axis : 31;
+				uint32_t rightChild;
+			} inner;
+			¡£¡¢
+				uint64_t data;
 		};
-		uint32_t axisOffset[3];
+		BoundingBox3f bbox;
 
-		bool isLeaf() const { return node.flag == 1; }
+		bool isLeaf() const {
+			return leaf.flag == 1;
+		}
 
-		bool isInner() const { return node.flag == 0; }
+		bool isInner() const {
+			return leaf.flag == 0;
+		}
 
-		bool isUnused() const { return data == 0; }
+		bool isUnused() const {
+			return data == 0;
+		}
 
-		uint32_t getStart() const { return node.start; }
+		uint32_t start() const {
+			return leaf.start;
+		}
 
-		uint32_t getEnd() const { return node.start + node.size; }
-
-		// calculate node's bounding box by bbox of the entire scene
-		const BoundingBox3f getBoundingBox(BoundingBox3f &bbox) const {
-			Point3f size = (bbox.max - bbox.min) / (1 << node.depth);
-			Point3f min(
-				bbox.min[0] + size[0] * axisOffset[0],
-				bbox.min[1] + size[1] * axisOffset[1], 
-				bbox.min[2] + size[2] * axisOffset[2]
-			);
-			Point3f max = min + size;
-			return BoundingBox3f(min, max);
+		uint32_t end() const {
+			return leaf.start + leaf.size;
 		}
 	};
-
 private:
-	std::vector<Mesh *> m_meshes;			///< List of meshes registered with Octree
-	std::vector<uint32_t> m_indices;		///< Index references by Octree nodes
-	std::vector<uint32_t> m_meshOffset;		///< Index of the first triangle for each shape
-    BoundingBox3f m_bbox;					///< Bounding box of the entire scene
+	std::vector<Mesh *> m_meshes;       ///< List of meshes registered with the BVH
+	std::vector<uint32_t> m_meshOffset; ///< Index of the first triangle for each shape
+	std::vector<BVHNode> m_nodes;       ///< BVH nodes
+	std::vector<uint32_t> m_indices;    ///< Index references by BVH nodes
+	BoundingBox3f m_bbox;               ///< Bounding box of the entire BVH
 };
 
 NORI_NAMESPACE_END
+
+#endif /* __NORI_BVH_H */
