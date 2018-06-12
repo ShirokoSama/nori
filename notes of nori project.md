@@ -29,7 +29,7 @@ enum EClassType = {
         EMesh,  
         EBSDF,  
         EPhaseFunction,  
-        EEmitter, 
+        EEmitter,  
         EMedium,  
         ECamera,  
         EIntegrator,  
@@ -68,6 +68,13 @@ static NoriObject *createInstance(const std::string &name, const PropertyList &p
 ```
 
 **loadFromXML** -- 解析xml文件，递归解析，区分子节点和属性，返回根NoriObject  
+从文件的根节点开始调用递归函数*parseTag(pugi::xml_node &node, PropertyList &list, int parentTag)*
+
+1. 传入当前的xml_node + 父节点PropertyList的引用 + 父节点tag  
+2. 获得当前node的tag  
+3. 对所有子节点调用此函数，更新本节点的PropertyList，并获得子NoriObject数组  
+4. 若当前node为NoriObject，则根据其type属性从*NoriObjectFactory*中实例化对象，如虚类*Integrator*则根据其type属性实例化*NormalIntegrator*或*SimpleIntegrator*等等，并执行*addChild*添加子节点数组中的对象  
+5. 若当前node为为Property，则set传入的来自父节点的PropertyList  
 
 **render** -- `static void render(Scene *scene, const std::string &filename)`  
 
