@@ -73,5 +73,22 @@ static NoriObject *createInstance(const std::string &name, const PropertyList &p
 5. 并行执行线程，将所有block放到大的block内  
 6. 输出图像并转化为Bitmap，保存至exr格式和png格式  
 
-**scene** -- 
+scene.h / scene.cpp 场景 - NoriObject的派生类
+------------------------
+```
+// 成员变量
+std::vector<Mesh *> m_meshes;
+Integrator *m_integrator = nullptr;
+Sampler *m_sampler = nullptr;
+Camera *m_camera = nullptr;
+Accel *m_accel = nullptr;
+// 成员函数 省略constructor,destructor,getter,setter
+bool rayIntersect(const Ray3f &ray, Intersection &its) const;   //调用m_accel的rayIntersect函数进行加速的相交检测
+bool rayIntersect(const Ray3f &ray) const;                      //同上，但shadow_ray设为true，只判断是否相交，不计算额外信息
+const BoundingBox3f &getBoundingBox() const;                    //获得包围盒
+void activate();
+void addChild(NoriObject *obj);
+```
 
+accel.h / accel.h - My Implement of Octree Accelration
+------------------------

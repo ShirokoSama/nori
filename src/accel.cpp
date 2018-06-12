@@ -22,10 +22,9 @@
 NORI_NAMESPACE_BEGIN
 
 void Accel::addMesh(Mesh *mesh) {
-    if (m_mesh)
-        throw NoriException("Accel: only a single mesh is supported!");
-    m_mesh = mesh;
-    m_bbox = m_mesh->getBoundingBox();
+	m_meshes.push_back(mesh);
+	m_meshOffset.push_back(m_meshOffset.back() + mesh->getTriangleCount());
+	m_bbox.expandBy(mesh->getBoundingBox());
 }
 
 void Accel::build() {
@@ -33,22 +32,23 @@ void Accel::build() {
 }
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const {
-    bool foundIntersection = false;  // Was an intersection found so far?
-    uint32_t f = (uint32_t) -1;      // Triangle index of the closest intersection
+    bool foundIntersection = false;  /// Was an intersection found so far?
+    uint32_t f = (uint32_t) -1;      /// Triangle index of the closest intersection
 
     Ray3f ray(ray_); /// Make a copy of the ray (we will need to update its '.maxt' value)
 
     /* Brute force search through all triangles */
-    for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx) {
+    for (uint32_t idx = 0; idx < getTriangleCount(); ++idx) {
+		Mesh *mesh = m_meshes[findMeshIndex(idx)];
         float u, v, t;
-        if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
+        if (mesh->rayIntersect(idx, ray, u, v, t)) {
             /* An intersection was found! Can terminate
                immediately if this is a shadow ray query */
             if (shadowRay)
                 return true;
             ray.maxt = its.t = t;
             its.uv = Point2f(u, v);
-            its.mesh = m_mesh;
+            its.mesh = mesh;
             f = idx;
             foundIntersection = true;
         }
