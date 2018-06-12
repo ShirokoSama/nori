@@ -137,8 +137,8 @@ protected:
 				uint32_t axis : 31;
 				uint32_t rightChild;
 			} inner;
-			¡£¡¢
-				uint64_t data;
+
+			uint64_t data;
 		};
 		BoundingBox3f bbox;
 
