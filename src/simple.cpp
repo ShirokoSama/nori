@@ -45,5 +45,5 @@ private:
 	Color3f m_energy;
 };
 
-NORI_REGISTER_CLASS(SimpleIntegrator, "simple");
+NORI_REGISTER_CLASS(SimpleIntegrator, "simple")
 NORI_NAMESPACE_END
