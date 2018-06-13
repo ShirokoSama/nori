@@ -2,8 +2,8 @@ Notes of Nori Project -- Srf
 ========================
 
 外部依赖external dependcy libraries
-
 ------------------------
+
 pcg32 -- 伪随机数生成器  
 filesystem -- 跨平台文件系统操作库  
 pugixml -- 轻量级的xml解析库  
@@ -16,8 +16,8 @@ Eigen(eigen) -- 线性代数库，主要可能用到Point2i Point2f Point3f Vect
 Hypoyhesis test support library -- 统计假设检验测试，判断|c' - c|是否可能由随机噪声造成
 
 main.cpp 基础渲染循环
-
 ------------------------
+
 .\nori.exe scene.xml执行程序  
 若文件后缀为xml，则解析至NoriObject对象  
 
@@ -86,7 +86,6 @@ static NoriObject *createInstance(const std::string &name, const PropertyList &p
 6. 输出图像并转化为Bitmap，保存至exr格式和png格式  
 
 scene.h / scene.cpp 场景 - NoriObject的派生类
-
 ------------------------
 
 ```c++
@@ -106,3 +105,101 @@ void addChild(NoriObject *obj);
 
 accel.h / accel.h - My Implement of Octree Accelration
 ------------------------
+
+to be completed  
+
+warp.h / warp.cpp - Monte Carlo Sampling
+------------------------
+
+首先生成两个0-1的独立随机变量到一个方形平面内，再利用inverse method，由PDF计算CDF，根据CDF的逆将两个独立随机变量映射到需求的分布上  
+
+**squareToTentPdf** & **squareToTent**  
+映射到长宽为-1到1的方形内，以“帐篷”状分布  
+
+$$p(x, y)=p_1(x)\,p_1(y)\quad\text{and}\quad
+    p_1(t) = \begin{cases}
+    1-|t|, & -1\le t\le 1\\
+    0,&\text{otherwise}\\
+    \end{cases}$$
+$$t =
+    \begin{cases}
+    \sqrt{2\xi}-1, & 0\le t\lt 0.5\\
+    1 - \sqrt{2-2\xi}, & 0.5\le t\le 1
+    \end{cases}$$
+
+**squareToUniformDiskPdf** & **squareToUniformDisk**  
+映射到圆心为原点，半径为1的圆盘内  
+
+$$p(x, y) =
+    \begin{cases}
+    1/\pi, & x^2 + y^2 \le 1\\
+    0, & otherwise
+    \end{cases}$$
+$$r = \sqrt{\xi_1} \quad \theta = 2\pi\xi_2$$
+
+**squareToUniformSpherePdf** & **squareToUniformSphere**  
+映射到圆心为球心，半径为1的球面上  
+
+$$p(x, y, z) = 1/4\pi, \quad x^2 + y^2 + z^2 = 1$$
+$$\theta = arccos(1-2\xi_1) \quad \phi = 2\pi\xi_2$$
+$$x=sin\theta cos\phi \quad y=sin\theta sin\phi \quad z=cos\theta$$
+
+**squareToUniformHemiSpherePdf** & **squareToUniformHemiSphere**  
+映射到圆心为球心，半径为1的半球面上  
+
+$$p(x, y, z) = 1/2\pi, \quad x^2 + y^2 + z^2 = 1 \quad z\ge0$$
+$$\theta = arccos(1-\xi_1) \quad \phi = 2\pi\xi_2$$
+
+**squareToCosineHemiSpherePdf** & **squareToCosineHemiSphere**  
+映射到圆心为球心，半径为1的半球面上，概率与theta角的余弦成正比  
+
+$$p(x, y, z) = z/\pi, \quad x^2 + y^2 + z^2 = 1 \quad z\ge0$$
+$$\theta = \frac{arccos(1-2\xi_1)}{2} \quad \phi = 2\pi\xi_2$$
+
+**squareToBeckmannPdf** & **squareToBeckmann**  
+映射到贝克曼分布  
+
+$$p(\omega) = {\frac{1}{2\pi}}\ \cdot\ {\frac{2 exp{\frac{-\tan^2{\theta}}{\alpha^2}}}{\alpha^2 \cos^3 \theta}}\!\!\!$$
+$$\int_{0}^{2\pi}\int_0^{\frac{\pi}{2}} p(\omega) \sin\theta\,\mathrm{d}\theta\,\mathrm{d}\phi=1 \quad p(\theta, \phi) = p(\omega)sin\theta$$
+$$\theta = arctan(\sqrt{-\alpha^2ln(1-\xi_1)}) \quad \phi=2\pi\xi_2$$
+
+integrator.h -- Integrator抽象类/接口  
+------------------------
+
+积分器抽象类，必须实现的接口为  
+*Color3f Li(const Scene \*scene, Sampler \*sampler, const Ray3f &ray) const*  
+根据传入的光线ray与场景求交，获得相交信息，如交点位置、法线等，结合当前的光照信息和参数返回一个RGB颜色值  
+
+simple.cpp -- 简单点光源Integrator My Implement
+------------------------
+
+读取配置文件获得点光源位置*Point3f m_position*和辐射能量*Color3f m_energy*  
+辐射衰减公式为  
+
+$$L(\mathbf{x})=\frac{\Phi}{4\pi^2} \frac{\mathrm{max}(0, \cos\theta)}{\|\mathbf{x}-\mathbf{p}\|^2} V(\mathbf{x}\leftrightarrow\mathbf{p}) \quad V(\mathbf{x}\leftrightarrow\mathbf{p}):=
+    \begin{cases}
+    1,&\text{if x and p are mutually visible}\\
+    0,&\text{otherwise}
+    \end{cases}$$
+
+实现*Color3f Li*的步骤为  
+
+1. 将传入的射线ray与场景相交检测，若无交点则返回0值(黑色)
+2. 获得交点的位置，以其为原点，交点到光源的方向为延伸方向在场景中进行相交检测
+3. 若相交则说明被遮挡，返回0值
+4. 若不相交则根据衰减公式计算亮度
+
+ao.cpp -- 环境光遮蔽Integrator My Implement
+------------------------
+
+假设场景内物体从各个方向接受均匀的照明，表面某点的亮度受是否被物体的其他部分遮挡所影响  
+通过在物体表面某点为球心的半球面的各个方向进行积分来计算被遮蔽的程度，公式如下  
+
+$$L(\mathbf{x})=\int_{H^2(\mathbf{x})}V(\mathbf{x}, \mathbf{x}+\alpha\omega)\,\frac{\cos\theta}{\pi}\,\mathrm{d}\omega$$
+
+实现*Color3f Li*的步骤为  
+
+1. 将传入的射线ray与场景相交检测，若无交点则返回0值(黑色)
+2. 获得交点位置，以其为球心，在半球面上进行蒙特卡洛积分，采样方式见SquareToCosineHemiSphere的实现，以更好地匹配积分公式
+3. 对每个采样获得的方向延伸出的射线求交，若无相交则加1，最后除以采样点数(见蒙特卡洛积分公式)
+4. 返回改点求得的亮度
