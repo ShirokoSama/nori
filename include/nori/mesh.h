@@ -21,6 +21,7 @@
 #include <nori/object.h>
 #include <nori/frame.h>
 #include <nori/bbox.h>
+#include <nori/dpdf.h>
 
 NORI_NAMESPACE_BEGIN
 
@@ -63,6 +64,15 @@ struct Intersection {
     std::string toString() const;
 };
 
+struct SampleOnMesh {
+	/// The sampled position p on the surface of the mesh
+	Point3f position;
+	/// The interpolated surface normal n at p computed from the per-vertex normals
+	Vector3f normal;
+	/// The probability density of the sample
+	float probabilityDensity;
+};
+
 /**
  * \brief Triangle mesh
  *
@@ -87,6 +97,8 @@ public:
 
     /// Return the surface area of the given triangle
     float surfaceArea(uint32_t index) const;
+
+	float surfaceArea() const { return m_surfaceArea; }
 
     //// Return an axis-aligned bounding box of the entire mesh
     const BoundingBox3f &getBoundingBox() const { return m_bbox; }
@@ -123,6 +135,8 @@ public:
      *   \c true if an intersection has been detected
      */
     bool rayIntersect(uint32_t index, const Ray3f &ray, float &u, float &v, float &t) const;
+
+	SampleOnMesh samplePosition(Point2f &sample) const;
 
     /// Return a pointer to the vertex positions
     const MatrixXf &getVertexPositions() const { return m_V; }
@@ -168,14 +182,17 @@ protected:
     Mesh();
 
 protected:
-    std::string m_name;                  ///< Identifying name
-    MatrixXf      m_V;                   ///< Vertex positions
-    MatrixXf      m_N;                   ///< Vertex normals
-    MatrixXf      m_UV;                  ///< Vertex texture coordinates
-    MatrixXu      m_F;                   ///< Faces
-    BSDF         *m_bsdf = nullptr;      ///< BSDF of the surface
-    Emitter    *m_emitter = nullptr;     ///< Associated emitter, if any
-    BoundingBox3f m_bbox;                ///< Bounding box of the mesh
+    std::string		m_name;					///< Identifying name
+    MatrixXf		m_V;					///< Vertex positions
+    MatrixXf		m_N;					///< Vertex normals
+    MatrixXf		m_UV;					///< Vertex texture coordinates
+    MatrixXu		m_F;					///< Faces
+    BSDF			*m_bsdf = nullptr;      ///< BSDF of the surface
+    Emitter			*m_emitter = nullptr;	///< Associated emitter, if any
+    BoundingBox3f	m_bbox;					///< Bounding box of the mesh
+	///< Discrete probability distribution of mesh's triangle surface areas
+	DiscretePDF		*m_dpdf = nullptr;
+	float			m_surfaceArea;
 };
 
 NORI_NAMESPACE_END

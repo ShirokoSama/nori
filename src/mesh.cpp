@@ -30,6 +30,7 @@ Mesh::Mesh() { }
 Mesh::~Mesh() {
     delete m_bsdf;
     delete m_emitter;
+	delete m_dpdf;
 }
 
 void Mesh::activate() {
@@ -38,6 +39,20 @@ void Mesh::activate() {
         m_bsdf = static_cast<BSDF *>(
             NoriObjectFactory::createInstance("diffuse", PropertyList()));
     }
+	if (m_emitter) {
+		int triangleCount = getTriangleCount();
+		m_dpdf = new DiscretePDF(triangleCount);
+		m_surfaceArea = 0;
+		std::vector<float> sav;
+		for (auto i = 0; i < triangleCount; i++) {
+			float sa = surfaceArea(i);
+			m_surfaceArea += sa;
+			sav.push_back(sa);
+		}
+		for (auto i = 0; i < triangleCount; i++)
+			m_dpdf->append(sav.at(i) / m_surfaceArea);
+		m_dpdf->normalize();
+	}
 }
 
 float Mesh::surfaceArea(uint32_t index) const {
@@ -85,6 +100,28 @@ bool Mesh::rayIntersect(uint32_t index, const Ray3f &ray, float &u, float &v, fl
     t = edge2.dot(qvec) * inv_det;
 
     return t >= ray.mint && t <= ray.maxt;
+}
+
+SampleOnMesh Mesh::samplePosition(Point2f &sample) const {
+	float ux = sample.x();
+	float uy = sample.y();
+	float u = ux + uy > 1.f ? ux + uy - 1.f : ux + uy;
+	int triIndex = m_dpdf->sample(u);
+	uint32_t i0 = m_F(0, triIndex), i1 = m_F(1, triIndex), i2 = m_F(2, triIndex);
+	const Point3f p0 = m_V.col(i0), p1 = m_V.col(i1), p2 = m_V.col(i2);
+	float alpha = 1 - std::sqrt(1 - ux);
+	float beta = uy * std::sqrt(1 - ux);
+	float gamma = 1.f - alpha - beta;
+	SampleOnMesh som;
+	som.position = p0 * alpha + p1 * beta + p2 * gamma;
+	if (m_N.size() > 0) {
+		const Vector3f n0 = m_N.col(i0), n1 = m_N.col(i1), n2 = m_N.col(i2);
+		som.normal = (n0 * alpha + n1 * beta + n2 * gamma).normalized();
+	}
+	else
+		som.normal = (p1 - p0).cross(p2 - p0).normalized();
+	som.probabilityDensity = 1.f / m_surfaceArea;
+	return som;
 }
 
 BoundingBox3f Mesh::getBoundingBox(uint32_t index) const {

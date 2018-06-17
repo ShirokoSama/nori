@@ -28,7 +28,7 @@ public:
 	}
 
 	std::string toString() const {
-		return std::string("SimpleIntegrator[]");
+		return std::string("AoIntegrator[]");
 	}
 };
 
