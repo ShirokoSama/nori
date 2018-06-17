@@ -49,7 +49,7 @@ public:
     }
 
 	inline Vector3f getWh(const Vector3f &wi, const Vector3f &wo) const {
-		return (wi + wo) / std::sqrt((wi + wo).dot(wi + wo));
+		return (wi + wo).normalized();
 	}
 
 	inline float ndf(const Vector3f &wh) const {
@@ -78,7 +78,7 @@ public:
 	}
 
 	inline float getJh(const Vector3f &wh, const Vector3f &wo) const {
-		return 1.f / (4.f * wh.dot(wo));
+		return 1.f / (4 * wh.dot(wo));
 	}
 
     /// Evaluate the BRDF for the given pair of directions
@@ -90,6 +90,7 @@ public:
 		Color3f specular = m_ks * 
 			((ndf(wh) * fresnel(wh.dot(wi), m_extIOR, m_intIOR) * geometryFunc(wi, wo, wh)) 
 				/ (4.f * wi.z() * wo.z() * wh.z()));
+		return diffuse + specular;
     }
 
     /// Evaluate the sampling density of \ref sample() wrt. solid angles
@@ -97,21 +98,35 @@ public:
 		Vector3f wi = bRec.wi.normalized();
 		Vector3f wo = bRec.wo.normalized();
 		Vector3f wh = getWh(wi, wo);
+		if (wh.z() <= 0)
+			return 0.f;
 		float d = ndf(wh);
 		float jh = getJh(wh, wo);
-		float cosThetaO = wo.z();
-		return m_ks * d * jh + (1 - m_ks) * cosThetaO * INV_PI;
+		return m_ks * d * jh + (1 - m_ks) * Warp::squareToCosineHemispherePdf(wo);
     }
 
     /// Sample the BRDF
     Color3f sample(BSDFQueryRecord &bRec, const Point2f &_sample) const {
-    	throw NoriException("MicrofacetBRDF::sample(): not implemented!");
+		bRec.eta = 1.0f;
+		bRec.measure = ESolidAngle;
 
-        // Note: Once you have implemented the part that computes the scattered
-        // direction, the last part of this function should simply return the
-        // BRDF value divided by the solid angle density and multiplied by the
-        // cosine factor from the reflection equation, i.e.
-        // return eval(bRec) * Frame::cosTheta(bRec.wo) / pdf(bRec);
+		float ux = _sample.x();
+		float uy = _sample.y();
+
+		if (ux < m_ks) {
+			// specular case
+			Vector3f normal = Warp::squareToBeckmann(Point2f(ux / m_ks, uy), m_alpha);
+			Frame nf(normal);
+			Vector3f localWi = nf.toLocal(bRec.wi);
+			bRec.wo = nf.toWorld(Vector3f(-localWi.x(), -localWi.y(), localWi.z())).normalized();
+		}
+		else {
+			if (Frame::cosTheta(bRec.wi) <= 0)
+				return Color3f(0.0f);
+			bRec.wo = Warp::squareToCosineHemisphere(Point2f((ux - m_ks) / (1 - m_ks), uy));
+		}
+
+        return eval(bRec) * Frame::cosTheta(bRec.wo) / pdf(bRec);
     }
 
     bool isDiffuse() const {

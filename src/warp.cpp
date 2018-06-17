@@ -60,7 +60,7 @@ Point2f Warp::squareToUniformDisk(const Point2f &sample) {
 float Warp::squareToUniformDiskPdf(const Point2f &p) {
 	float x = p.x();
 	float y = p.y();
-	return (x * x + y * y <= 1.f) ? 1.f / M_PI : 0.0f;
+	return (x * x + y * y <= 1.f) ? INV_PI : 0.0f;
 }
 
 Vector3f Warp::squareToUniformSphere(const Point2f &sample) {
@@ -114,7 +114,7 @@ Vector3f Warp::squareToCosineHemisphere(const Point2f &sample) {
 }
 
 float Warp::squareToCosineHemispherePdf(const Vector3f &v) {
-	return v.z() >= 0 ? v.z() / M_PI : 0;
+	return v.z() >= 0 ? v.z() * INV_PI : 0;
 }
 
 Vector3f Warp::squareToBeckmann(const Point2f &sample, float alpha) {
@@ -133,7 +133,7 @@ float Warp::squareToBeckmannPdf(const Vector3f &m, float alpha) {
 	float cosTheta = Frame::cosTheta(m);
 	float tanTheta = Frame::tanTheta(m);
 	return cosTheta > 0 ? 
-		(1.f / M_PI) * 
+		(1.f * INV_PI) * 
 		(std::exp(-std::pow(tanTheta, 2) / std::pow(alpha, 2)) /
 		(std::pow(alpha, 2) * std::pow(cosTheta, 3)))
 		: 0;
