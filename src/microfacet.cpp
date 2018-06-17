@@ -48,14 +48,59 @@ public:
         m_ks = 1 - m_kd.maxCoeff();
     }
 
+	inline Vector3f getWh(const Vector3f &wi, const Vector3f &wo) const {
+		return (wi + wo) / std::sqrt((wi + wo).dot(wi + wo));
+	}
+
+	inline float ndf(const Vector3f &wh) const {
+		return Warp::squareToBeckmannPdf(wh, m_alpha);
+	}
+
+	inline float geometryFunc(const Vector3f &wi, const Vector3f &wo, const Vector3f &wh) const {
+		return g1(wi, wh) * g1(wo, wh);
+	}
+
+	inline float g1(const Vector3f &wv, const Vector3f &wh) const {
+		Vector3f normal(0.0f, 0.0f, 1.0f);
+		float c = wv.dot(wh) / wv.dot(normal);
+		if (c > 0) {
+			float cosThetaV = wv.dot(normal);
+			float tanTehtaV = std::sqrt(1 - cosThetaV * cosThetaV) / cosThetaV;
+			float b = 1.f / (m_alpha * tanTehtaV);
+			if (b < 1.6) {
+				return (3.535f * b + 2.181f * b * b) / (1.f + 2.276f * b + 2.577f * b * b);
+			}
+			else
+				return 1.f;
+		}
+		else
+			return 0.0f;
+	}
+
+	inline float getJh(const Vector3f &wh, const Vector3f &wo) const {
+		return 1.f / (4.f * wh.dot(wo));
+	}
+
     /// Evaluate the BRDF for the given pair of directions
     Color3f eval(const BSDFQueryRecord &bRec) const {
-    	throw NoriException("MicrofacetBRDF::eval(): not implemented!");
+		Vector3f wi = bRec.wi.normalized();
+		Vector3f wo = bRec.wo.normalized();
+		Vector3f wh = getWh(wi, wo);
+		Color3f diffuse = m_kd * INV_PI;
+		Color3f specular = m_ks * 
+			((ndf(wh) * fresnel(wh.dot(wi), m_extIOR, m_intIOR) * geometryFunc(wi, wo, wh)) 
+				/ (4.f * wi.z() * wo.z() * wh.z()));
     }
 
     /// Evaluate the sampling density of \ref sample() wrt. solid angles
     float pdf(const BSDFQueryRecord &bRec) const {
-    	throw NoriException("MicrofacetBRDF::pdf(): not implemented!");
+		Vector3f wi = bRec.wi.normalized();
+		Vector3f wo = bRec.wo.normalized();
+		Vector3f wh = getWh(wi, wo);
+		float d = ndf(wh);
+		float jh = getJh(wh, wo);
+		float cosThetaO = wo.z();
+		return m_ks * d * jh + (1 - m_ks) * cosThetaO * INV_PI;
     }
 
     /// Sample the BRDF
