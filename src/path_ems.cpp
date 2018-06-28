@@ -11,10 +11,11 @@ public:
 	PathEMSIntegrator(const PropertyList &props) {}
 
 	Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
-		return Li(scene, sampler, ray, 0);
+		bool indirectFlag = false;
+		return Li(scene, sampler, ray, 0, &indirectFlag);
 	}
 
-	Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray, int depth) const {
+	Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray, int depth, bool *indirect) const {
 		if (depth >= 3)
 			return Color3f(0.0f);
 
@@ -24,8 +25,9 @@ public:
 
 		Color3f li(0.0f);
 		if (its.mesh->isEmitter()) {
+			*indirect = false;
 			const Emitter *emitter = its.mesh->getEmitter();
-			li += emitter->le();
+			return emitter->le();
 		}
 
 		const BSDF *bsdf = its.mesh->getBSDF();
@@ -38,7 +40,8 @@ public:
 			float u = sampler->next1D();
 			if (u < 0.95f) {
 				Ray3f rRay(its.p, its.shFrame.toWorld(bsdfQueryRecord.wo));
-				li += (Li(scene, sampler, rRay, depth) / 0.95f);
+				bool indirectFlag = false;
+				li += (Li(scene, sampler, rRay, depth, &indirectFlag) / 0.95f);
 			}
 			else {
 				return Color3f(0.0f);
@@ -78,14 +81,21 @@ public:
 				}
 			}
 			// indirect illumination part
+			size_t discardCount = 0;
 			Color3f lii(0.0f);
 			for (size_t i = 0; i < sampler->getSampleCount(); i++) {
 				Point2f sample = sampler->next2D();
 				BSDFQueryRecord bsdfQueryRecord(its.shFrame.toLocal(-ray.d));
 				Color3f sampleRslt = bsdf->sample(bsdfQueryRecord, sample);
-				lii += sampleRslt * Li(scene, sampler, Ray3f(its.p, its.shFrame.toWorld(bsdfQueryRecord.wo)), depth + 1);
+				bool indirectFlag = true;
+				Color3f liRslt = Li(scene, sampler, Ray3f(its.p, its.shFrame.toWorld(bsdfQueryRecord.wo)), depth + 1, &indirectFlag);
+				if (indirectFlag)
+					lii += sampleRslt * liRslt;
+				else
+					discardCount++;
 			}
-			li += (lii / static_cast<float>(sampler->getSampleCount()));
+			if (sampler->getSampleCount() > discardCount)
+				li += lii / static_cast<float>(sampler->getSampleCount() - discardCount);
 		}
 
 		return li;

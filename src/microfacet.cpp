@@ -97,9 +97,11 @@ public:
     float pdf(const BSDFQueryRecord &bRec) const {
 		Vector3f wi = bRec.wi.normalized();
 		Vector3f wo = bRec.wo.normalized();
+		if (bRec.measure != ESolidAngle
+			|| Frame::cosTheta(bRec.wi) <= 0
+			|| Frame::cosTheta(bRec.wo) <= 0)
+			return 0.0f;
 		Vector3f wh = getWh(wi, wo);
-		if (wh.z() <= 0)
-			return 0.f;
 		float d = ndf(wh);
 		float jh = getJh(wh, wo);
 		return m_ks * d * jh + (1 - m_ks) * Warp::squareToCosineHemispherePdf(wo);
@@ -107,13 +109,16 @@ public:
 
     /// Sample the BRDF
     Color3f sample(BSDFQueryRecord &bRec, const Point2f &_sample) const {
+		if (Frame::cosTheta(bRec.wi) <= 0)
+			return Color3f(0.0f);
+
 		bRec.eta = 1.0f;
 		bRec.measure = ESolidAngle;
 
 		float ux = _sample.x();
 		float uy = _sample.y();
 
-		if (ux < m_ks) {
+		if (ux <= m_ks) {
 			// specular case
 			Vector3f normal = Warp::squareToBeckmann(Point2f(ux / m_ks, uy), m_alpha);
 			Frame nf(normal);
@@ -121,12 +126,13 @@ public:
 			bRec.wo = nf.toWorld(Vector3f(-localWi.x(), -localWi.y(), localWi.z())).normalized();
 		}
 		else {
+			// diffuse case
 			if (Frame::cosTheta(bRec.wi) <= 0)
 				return Color3f(0.0f);
 			bRec.wo = Warp::squareToCosineHemisphere(Point2f((ux - m_ks) / (1 - m_ks), uy));
 		}
 
-        return eval(bRec) * Frame::cosTheta(bRec.wo) / pdf(bRec);
+        return pdf(bRec) == 0 ? Color3f(0.0f) : eval(bRec) * Frame::cosTheta(bRec.wo) / pdf(bRec);
     }
 
     bool isDiffuse() const {

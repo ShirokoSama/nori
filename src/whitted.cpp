@@ -49,6 +49,7 @@ public:
 								std::abs(its.shFrame.n.dot(dir.normalized())) *
 								std::abs(soe.normal.dot(-dir.normalized())) /
 								dir.dot(dir);
+							/*printf("%s %f %s\n", fr.toString().c_str(), gxy, soe.lightEnergy.toString().c_str());*/
 							lr += gxy * fr * soe.lightEnergy;
 						}
 					}
