@@ -177,6 +177,8 @@ public:
      * */
     EClassType getClassType() const { return EMesh; }
 
+	float getSurfaceArea() const { return m_surfaceArea; }
+
 protected:
     /// Create an empty mesh
     Mesh();

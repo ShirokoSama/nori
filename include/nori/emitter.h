@@ -26,6 +26,7 @@ NORI_NAMESPACE_BEGIN
 struct SampleOnEmitter {
 	Point3f position;
 	Vector3f normal;
+	float probabilityDensity;
 	Color3f lightEnergy;
 };
 

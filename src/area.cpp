@@ -13,6 +13,7 @@ public:
 		SampleOnEmitter se;
 		se.position = sm.position;
 		se.normal = sm.normal;
+		se.probabilityDensity = sm.probabilityDensity;
 		se.lightEnergy = m_radiance / sm.probabilityDensity;
 		return se;
 	}
