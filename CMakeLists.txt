@@ -50,6 +50,7 @@ add_executable(nori
   include/nori/common.h
   include/nori/dpdf.h
   include/nori/frame.h
+  include/nori/gui.h
   include/nori/integrator.h
   include/nori/emitter.h
   include/nori/mesh.h
@@ -66,6 +67,8 @@ add_executable(nori
   include/nori/warp.h
 
   # Source code files
+  src/ao.cpp
+  src/area.cpp
   src/bitmap.cpp
   src/block.cpp
   src/accel.cpp
@@ -89,6 +92,11 @@ add_executable(nori
   src/microfacet.cpp
   src/mirror.cpp
   src/dielectric.cpp
+  src/simple.cpp
+  src/whitted.cpp
+  src/path_ems.cpp
+  src/path_mats.cpp
+  src/path_mis.cpp
 )
 
 add_definitions(${NANOGUI_EXTRA_DEFS})
